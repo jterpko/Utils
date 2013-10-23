@@ -47,7 +47,7 @@ class Orphan( object ):
         query_doc = {}
 
         connection = MongoClient(hostname, int(port))
-        connection['admin'].authenticate('dba','dba')
+        connection['admin'].authenticate(options.username,options.password)
 
         (d, c) = chunkdata['ns'].split('.')
 
@@ -65,20 +65,20 @@ class Orphan( object ):
         else:
             query_doc = { shard_key:{ "$gte": chunkdata['min'][shard_key], "$lte": chunkdata['max'][shard_key] } }
 
-        print "chunk:%s checking %s with query:%s" % (chunkdata['_id'], port, query_doc) if options.verbose
+        if options.verbose: print ("chunk:%s checking %s with query:%s") % (chunkdata['_id'], port, query_doc)
 
         bad_documents = collection.find(query_doc)
         thecount = bad_documents.count()
         for bad_document in bad_documents:
             self.saveBadChunk(bad_document, chunkdata['_id'], hostname, port)
 
-        print "found: %i" % thecount if options.verbose
+        if options.verbose: print ("found: %i") % thecount
 
         return thecount
 
     def getPrimary(self, hostname, port):
         connection = MongoReplicaSetClient(hostname, int(port))
-        connection['admin'].authenticate('dba','dba')
+        connection['admin'].authenticate(options.username,options.password)
 
         return connection.primary
 
@@ -101,7 +101,7 @@ class Orphan( object ):
         replicaset = shardStr.split('/')[0]
 
         connection = MongoReplicaSetClient(seedstr, replicaSet = replicaset)
-        connection['admin'].authenticate('dba','dba')
+        connection['admin'].authenticate(options.username,options.password)
 
         return connection.primary
 
@@ -110,13 +110,13 @@ class Orphan( object ):
         orphan_chunk_count = 0
         for chunk in self.getChunks():
 
-            print "\n\nprocessing chunk %s" % chunk['_id'] if options.verbose
+            if options.verbose: print ("\n\nprocessing chunk %s") % chunk['_id']
 
             shards_to_visit = self.getOppositeShards(chunk['shard'])
             for shard in shards_to_visit:
 
                 (host, port) = self.parseShardStr(shard)
-                print "\nchecking host: %s" % host if options.verbose
+                if options.verbose: print "\nchecking host: %s" % host
                 orphan_chunk_count += self.queryForChunk( host, port, chunk)
 
         return orphan_chunk_count
@@ -127,6 +127,8 @@ if __name__ == "__main__":
     parser.set_defaults(host="localhost",port=27017)
     parser.add_option("--host", dest="host", help="hostname to connect to")
     parser.add_option("--port", dest="port", type=int, help="port to connect to")
+    parser.add_option("--username", dest="username", help="username")
+    parser.add_option("--password", dest="password", help="password")
     parser.add_option("--verbose", dest="verbose", help="have verbose output about what is being checked")
     (options, args) = parser.parse_args()
 
