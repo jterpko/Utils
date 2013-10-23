@@ -12,12 +12,13 @@ import bson
 import datetime
 from pymongo import MongoReplicaSetClient
 from pymongo import MongoClient
+from optparse import OptionParser
 
 class Orphan( object ):
 
     def __init__( self ):
-        self.config_connection =  MongoClient('localhost', 50002)
-        self.config_connection['admin'].authenticate('dba','dba')
+        self.config_connection =  MongoClient(options.host, options.port)
+        self.config_connection['admin'].authenticate(options.username, options.password)
 
     def getChunks(self):
 
@@ -64,14 +65,14 @@ class Orphan( object ):
         else:
             query_doc = { shard_key:{ "$gte": chunkdata['min'][shard_key], "$lte": chunkdata['max'][shard_key] } }
 
-        print "chunk:%s checking %s with query:%s" % (chunkdata['_id'], port, query_doc)
+        print "chunk:%s checking %s with query:%s" % (chunkdata['_id'], port, query_doc) if options.verbose
 
         bad_documents = collection.find(query_doc)
         thecount = bad_documents.count()
         for bad_document in bad_documents:
             self.saveBadChunk(bad_document, chunkdata['_id'], hostname, port)
 
-        print "found: %i" % thecount
+        print "found: %i" % thecount if options.verbose
 
         return thecount
 
@@ -109,21 +110,29 @@ class Orphan( object ):
         orphan_chunk_count = 0
         for chunk in self.getChunks():
 
-            print "\n\n-----"
-            print "processing chunk %s" % chunk['_id']
+            print "\n\nprocessing chunk %s" % chunk['_id'] if options.verbose
 
             shards_to_visit = self.getOppositeShards(chunk['shard'])
             for shard in shards_to_visit:
 
                 (host, port) = self.parseShardStr(shard)
-                print "\nchecking host: %s" % host
+                print "\nchecking host: %s" % host if options.verbose
                 orphan_chunk_count += self.queryForChunk( host, port, chunk)
 
         return orphan_chunk_count
 
-orphan = Orphan()
-out = orphan.checkForOrphans()
-print "total:%i" % out
+if __name__ == "__main__":
+
+    parser = OptionParser()
+    parser.set_defaults(host="localhost",port=27017)
+    parser.add_option("--host", dest="host", help="hostname to connect to")
+    parser.add_option("--port", dest="port", type=int, help="port to connect to")
+    parser.add_option("--verbose", dest="verbose", help="have verbose output about what is being checked")
+    (options, args) = parser.parse_args()
+
+    orphan = Orphan()
+    out = orphan.checkForOrphans()
+    print "total:%i" % out
 
 
 
