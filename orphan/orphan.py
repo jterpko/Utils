@@ -20,6 +20,31 @@ class Orphan( object ):
         self.config_connection =  MongoClient(options.host, options.port)
         self.config_connection['admin'].authenticate(options.username, options.password)
 
+    def getBalancerState(self):
+        try:
+            balancer_state = self.config_connection['config']['settings'].find_one({"_id":"balancer"},{"_id":0,"stopped":1})
+        except Exception, e:
+            print e
+        return balancer_state['stopped']
+
+    def setBalancer(self, state):
+        try:
+            self.config_connection['config']['settings'].update({"_id":"balancer"}, {"$set" : { "stopped": state}}, True, False)
+        except Exception, e:
+            print e
+        return True
+
+    def checkBalancer(self):
+        try:
+            lock_count = self.config_connection['config']['locks'].find({ _id: "balancer" }).count()
+        except Exception, e:
+            print e
+
+        if lock_count != 0:
+            return False
+        else:
+            return True
+
     def getChunks(self):
 
         db = self.config_connection['config']
@@ -27,7 +52,7 @@ class Orphan( object ):
 
         return all_chunks
 
-    def saveBadChunk(self, doc, chunk, hostname, port):
+    def saveBadDocument(self, doc, chunk, hostname, port):
 
         bad_chunk_db = self.config_connection['_orphandocs']
         bad_chunk_collection = bad_chunk_db['orphandocs']
@@ -70,7 +95,7 @@ class Orphan( object ):
         bad_documents = collection.find(query_doc)
         thecount = bad_documents.count()
         for bad_document in bad_documents:
-            self.saveBadChunk(bad_document, chunkdata['_id'], hostname, port)
+            self.saveBadDocument(bad_document, chunkdata['_id'], hostname, port)
 
         if options.verbose: print ("found: %i") % thecount
 
@@ -133,8 +158,11 @@ if __name__ == "__main__":
     (options, args) = parser.parse_args()
 
     orphan = Orphan()
+
+    old_state = orphan.getBalancerState()
+    orphan.setBalancer(False)
     out = orphan.checkForOrphans()
-    print "total:%i" % out
+    orphan.setBalancer(old_state)
 
 
 
