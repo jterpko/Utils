@@ -10,6 +10,7 @@
 import pymongo
 import bson
 import datetime
+import json
 from pymongo import MongoReplicaSetClient
 from pymongo import MongoClient
 from optparse import OptionParser
@@ -46,6 +47,7 @@ class Orphan( object ):
             return True
 
     def getChunks(self):
+        """ return chunk cursor """
 
         db = self.config_connection['config']
         all_chunks = db.chunks.find()
@@ -53,6 +55,7 @@ class Orphan( object ):
         return all_chunks
 
     def saveBadDocument(self, doc, chunk, hostname, port):
+        """ saves data to host:port in a collection for review """
 
         bad_chunk_db = self.config_connection['_orphandocs']
         bad_chunk_collection = bad_chunk_db['orphandocs']
@@ -60,6 +63,7 @@ class Orphan( object ):
         master_document = {"host":hostname, "port":port, "doc":doc, "chunk":chunk, "thedate":datetime.datetime.utcnow()}
 
         try:
+            if options.verbose: print ("logging bad document")
             bad_chunk_collection.save(master_document)
         except Exception, e:
             print e
@@ -67,6 +71,7 @@ class Orphan( object ):
         return True
 
     def queryForChunk(self, hostname, port, chunkdata):
+        """ find data on a specific host:port based on chunkdata range """
 
         thecount = -1
         query_doc = {}
@@ -80,7 +85,9 @@ class Orphan( object ):
         collection = database[c]
 
         shard_key = chunkdata['min'].keys()[0]
+        key_list = {shard_key:1}
 
+        # detect if this is a center, top or bottom style chunk using the type of the key
         if isinstance(chunkdata['max'][shard_key], bson.max_key.MaxKey):
             query_doc = { shard_key:{"$gte": chunkdata['min'][shard_key] } }
 
@@ -88,20 +95,24 @@ class Orphan( object ):
             query_doc = { shard_key:{ "$lte": chunkdata['max'][shard_key] } }
 
         else:
-            query_doc = { shard_key:{ "$gte": chunkdata['min'][shard_key], "$lte": chunkdata['max'][shard_key] } }
+            query_doc = { shard_key:{ "$gte": chunkdata['min'][shard_key], "$lte": chunkdata['max'][shard_key] }  }
 
         if options.verbose: print ("chunk:%s checking %s with query:%s") % (chunkdata['_id'], port, query_doc)
 
-        bad_documents = collection.find(query_doc)
-        thecount = bad_documents.count()
-        for bad_document in bad_documents:
-            self.saveBadDocument(bad_document, chunkdata['_id'], hostname, port)
+        if options.logmode:
+            bad_documents = collection.find(query_doc, key_list)
+            thecount = bad_documents.count()
+            for bad_document in bad_documents:
+                self.saveBadDocument(bad_document, chunkdata['_id'], hostname, port)
+        else:
+            thecount = collection.find(query_doc).count()
 
         if options.verbose: print ("found: %i") % thecount
 
         return thecount
 
     def getPrimary(self, hostname, port):
+        """ Return the primary for a cluster """
         connection = MongoReplicaSetClient(hostname, int(port))
         connection['admin'].authenticate(options.username,options.password)
 
@@ -142,7 +153,7 @@ class Orphan( object ):
 
                 (host, port) = self.parseShardStr(shard)
                 if options.verbose: print "\nchecking host: %s" % host
-                orphan_chunk_count += self.queryForChunk( host, port, chunk)
+                orphan_chunk_count += self.queryForChunk( host, port, chunk )
 
         return orphan_chunk_count
 
@@ -154,15 +165,17 @@ if __name__ == "__main__":
     parser.add_option("--port", dest="port", type=int, help="port to connect to")
     parser.add_option("--username", dest="username", help="username")
     parser.add_option("--password", dest="password", help="password")
-    parser.add_option("--verbose", dest="verbose", help="have verbose output about what is being checked")
+    parser.add_option("--logmode", dest="logmode", action="store_true", default=False, help="quick pass mode or detailed logging of each orphan")
+    parser.add_option("--verbose", dest="verbose", action="store_true", default=False, help="have verbose output about what is being checked")
     (options, args) = parser.parse_args()
+
+    orphan_output = {}
 
     orphan = Orphan()
 
     old_state = orphan.getBalancerState()
     orphan.setBalancer(False)
-    out = orphan.checkForOrphans()
+    orphan_output['orphan_document_count'] = orphan.checkForOrphans()
     orphan.setBalancer(old_state)
 
-
-
+    print json.dumps(orphan_output, indent=4)
