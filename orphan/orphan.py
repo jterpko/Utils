@@ -47,20 +47,30 @@ class Orphan( object ):
             return True
 
     def getChunks(self):
-        """ return chunk cursor """
+        """ return chunk list """
 
+        chunks = []
         db = self.config_connection['config']
         all_chunks = db.chunks.find()
 
-        return all_chunks
+        for chunk in all_chunks:
+            chunks.append(chunk)
 
-    def saveBadDocument(self, doc, chunk, hostname, port):
+        return chunks
+
+    def saveBadDocument(self, doc, chunk, hostname, port, db, collection):
         """ saves data to host:port in a collection for review """
 
         bad_chunk_db = self.config_connection['_orphandocs']
         bad_chunk_collection = bad_chunk_db['orphandocs']
 
-        master_document = {"host":hostname, "port":port, "doc":doc, "chunk":chunk, "thedate":datetime.datetime.utcnow()}
+        master_document = {"host":hostname,
+                            "port":port,
+                            "doc":doc,
+                            "chunk":chunk,
+                            "database":db,
+                            "collection":collection,
+                            "thedate":datetime.datetime.utcnow()}
 
         try:
             if options.verbose: print ("logging bad document")
@@ -99,13 +109,15 @@ class Orphan( object ):
 
         if options.verbose: print ("chunk:%s checking %s with query:%s") % (chunkdata['_id'], port, query_doc)
 
-        if options.logmode:
+        if not options.fastmode:
             bad_documents = collection.find(query_doc, key_list)
             thecount = bad_documents.count()
             for bad_document in bad_documents:
-                self.saveBadDocument(bad_document, chunkdata['_id'], hostname, port)
+                self.saveBadDocument( bad_document, chunkdata['_id'], hostname, port, d, c )
         else:
             thecount = collection.find(query_doc).count()
+            if thecount > 0:
+                self.saveBadDocument( {"count":thecount}, chunkdata['_id'], hostname, port, d, c )
 
         if options.verbose: print ("found: %i") % thecount
 
@@ -131,7 +143,7 @@ class Orphan( object ):
         return shards
 
     def parseShardStr(self, shardStr):
-        """ I hate string processing, takes string and parses to array of dics with host and port keys """
+        """ Takes string and parses to array of dics with host and port keys """
 
         seedstr = shardStr.split('/')[1].split(',')[0]
         replicaset = shardStr.split('/')[0]
@@ -143,7 +155,10 @@ class Orphan( object ):
 
     def checkForOrphans(self):
 
+        chunks = []
+
         orphan_chunk_count = 0
+
         for chunk in self.getChunks():
 
             if options.verbose: print ("\n\nprocessing chunk %s") % chunk['_id']
@@ -165,7 +180,7 @@ if __name__ == "__main__":
     parser.add_option("--port", dest="port", type=int, help="port to connect to")
     parser.add_option("--username", dest="username", help="username")
     parser.add_option("--password", dest="password", help="password")
-    parser.add_option("--logmode", dest="logmode", action="store_true", default=False, help="quick pass mode or detailed logging of each orphan")
+    parser.add_option("--fastmode", dest="fastmode", action="store_true", default=True, help="quick pass mode or detailed logging of each orphan")
     parser.add_option("--verbose", dest="verbose", action="store_true", default=False, help="have verbose output about what is being checked")
     (options, args) = parser.parse_args()
 
