@@ -7,6 +7,8 @@
 #
 #
 
+import sys
+import time
 import pymongo
 import bson
 import datetime
@@ -26,7 +28,12 @@ class Orphan( object ):
             balancer_state = self.config_connection['config']['settings'].find_one({"_id":"balancer"},{"_id":0,"stopped":1})
         except Exception, e:
             print e
-        return balancer_state['stopped']
+
+        if balancer_state:
+            return balancer_state['stopped']
+        else:
+            print "unable to determine state of Balancer, check config.settings"
+            sys.exit(0)
 
     def setBalancer(self, state):
         try:
@@ -36,12 +43,13 @@ class Orphan( object ):
         return True
 
     def checkBalancer(self):
+        """ returns True if balancer is stopped """
         try:
-            lock_count = self.config_connection['config']['locks'].find({ _id: "balancer" }).count()
+            lock_count = self.config_connection['config']['locks'].find_one({ "_id": "balancer" })
         except Exception, e:
             print e
 
-        if lock_count != 0:
+        if 'state' in lock_count and lock_count['state'] > 0:
             return False
         else:
             return True
@@ -99,13 +107,13 @@ class Orphan( object ):
 
         # detect if this is a center, top or bottom style chunk using the type of the key
         if isinstance(chunkdata['max'][shard_key], bson.max_key.MaxKey):
-            query_doc = { shard_key:{"$gte": chunkdata['min'][shard_key] } }
+            query_doc = { shard_key:{"$gt": chunkdata['min'][shard_key] } }
 
         elif isinstance(chunkdata['min'][shard_key], bson.min_key.MinKey):
             query_doc = { shard_key:{ "$lte": chunkdata['max'][shard_key] } }
 
         else:
-            query_doc = { shard_key:{ "$gte": chunkdata['min'][shard_key], "$lte": chunkdata['max'][shard_key] }  }
+            query_doc = { shard_key:{ "$gt": chunkdata['min'][shard_key], "$lte": chunkdata['max'][shard_key] }  }
 
         if options.verbose: print ("chunk:%s checking %s with query:%s") % (chunkdata['_id'], port, query_doc)
 
@@ -190,7 +198,15 @@ if __name__ == "__main__":
 
     old_state = orphan.getBalancerState()
     orphan.setBalancer(False)
-    orphan_output['orphan_document_count'] = orphan.checkForOrphans()
+
+    if orphan.checkBalancer():
+        orphan_output['orphan_document_count'] = orphan.checkForOrphans()
+    elif time.sleep(30) and orphan.checkBalancer():
+        orphan_output['orphan_document_count'] = orphan.checkForOrphans()
+    else:
+        print "balancer is running, exiting.."
+        sys.exit(0)
+
     orphan.setBalancer(old_state)
 
     print json.dumps(orphan_output, indent=4)
