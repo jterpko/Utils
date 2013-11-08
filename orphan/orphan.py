@@ -88,6 +88,20 @@ class Orphan( object ):
 
         return True
 
+    def isHashedKey(self, ns):
+        collection_data = self.config_connection['config']['collections'].find_one({ "_id": ns })
+        if 'key' in collection_data:
+            if collection_data['key'][collection_data['key'].keys()[0]] == "hashed":
+                return True
+        return False
+
+    def parseNS(self, ns):
+        """ return split ns string """
+        split_namespace = ""
+        if isinstance(ns, unicode):
+            split_namespace = ns.split('.')
+        return split_namespace
+
     def queryForChunk(self, hostname, port, chunkdata):
         """ find data on a specific host:port based on chunkdata range """
 
@@ -97,7 +111,7 @@ class Orphan( object ):
         connection = MongoClient(hostname, int(port))
         connection['admin'].authenticate(options.username,options.password)
 
-        (d, c) = chunkdata['ns'].split('.')
+        (d, c) = self.parseNS(chunkdata['ns'])
 
         database = connection[d]
         collection = database[c]
@@ -169,14 +183,21 @@ class Orphan( object ):
 
         for chunk in self.getChunks():
 
-            if options.verbose: print ("\n\nprocessing chunk %s") % chunk['_id']
+            if 'ns' in chunk and not self.isHashedKey(chunk['ns']):
 
-            shards_to_visit = self.getOppositeShards(chunk['shard'])
-            for shard in shards_to_visit:
+                if options.verbose: print ("\n\nprocessing chunk %s") % chunk['_id']
 
-                (host, port) = self.parseShardStr(shard)
-                if options.verbose: print "\nchecking host: %s" % host
-                orphan_chunk_count += self.queryForChunk( host, port, chunk )
+                shards_to_visit = self.getOppositeShards(chunk['shard'])
+                for shard in shards_to_visit:
+
+                    (host, port) = self.parseShardStr(shard)
+                    if options.verbose: print "\nchecking host: %s" % host
+                    orphan_chunk_count += self.queryForChunk( host, port, chunk )
+
+            else:
+
+                if options.verbose: print "chunk is hashed! skipping %s" % chunk
+                pass
 
         return orphan_chunk_count
 
