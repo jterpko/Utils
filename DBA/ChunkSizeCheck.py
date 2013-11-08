@@ -8,35 +8,19 @@ from optparse import OptionParser
 import time
 import sys, traceback
 from collections import OrderedDict
+import re
 
 
+def checkRequiredArguments(opts, parser):
+  missing_options = []
+  for option in parser.option_list:
+    if re.match(r'^\[REQUIRED\]', option.help) and eval('opts.' + option.dest) == None:
+      missing_options.extend(option._long_opts)
+  if len(missing_options) > 0:
+    print('Missing REQUIRED parameters: ' + str(missing_options))
+    parser.print_help()
+    exit(-1)
 
-parser = OptionParser(version="%prog 0.1-alpha")
-parser.add_option("-H", "--host", dest="host",
-                  help="Mongos host", metavar="HOST")
-parser.add_option("-P", "--port", dest="port",
-                  help="Mongos Port", metavar="PORT")
-parser.add_option("-d", "--db-name", dest="database_name",
-                  help="which database to check", metavar="DATABASE_NAME")
-parser.add_option("-c", "--collection-name", dest="collection_name",
-                  help="which collection to check", metavar="COLLECTION_NAME")
-####Adding Soon####
-#parser.add_option("-R", "--readOnly", dest="readOnly",
-#                  help="ReadOnly: Do not split chunks", metavar="ReadOnly")
-#parser.add_option("-n", "--number_chunks", dest="chunk_count",
-#                  help="Number of chunks to split (when not using --readOnly)", metavar="NumberChunks")
-parser.add_option("-s", "--size", dest="size",
-                  help="Chunk Max Size Defaults:64",default=64, metavar="SIZE")
-parser.add_option("-S", "--scale", dest="scale",
-                  help="Output Scaling (K,M,G) Default 'M'", default="M",metavar="SCALE")
-parser.add_option("-u", "--username", dest="user",
-                  help="Admin Auth User", metavar="USER")
-parser.add_option("-p", "--password", dest="password",
-                  help="Admin Auth Password", metavar="PASSWORD")
-(options, args) = parser.parse_args()
-
-#Parse and Validate Options
-#Check Type,  Check Required Pairs
 
 def mongo_connect(options,dbname,return_client=False):
   client      = MongoClient(options.host, int(options.port))
@@ -79,6 +63,86 @@ def check_chunk(options,chunk,Connector):
   if (output_dict['size'] > float(options.size)):
     output="Shard: %(shard)s\t\tSize: %(size)s\t Chunk: %(chunk)s" % output_dict
     print(output)
-  
+
+def parserSetup():
+  parser = OptionParser(version="%prog 0.1-alpha")
+  parser.add_option(
+    "-H", "--host", 
+    dest="host",
+    help="[REQUIRED] Mongos host", 
+    type="string",  
+    metavar="HOST"
+  )
+  parser.add_option(
+    "-P", "--port", 
+    type="int",
+    dest="port",
+    help="[REQUIRED] Mongos Port", 
+    metavar="PORT"
+  )
+  parser.add_option(
+    "-d", "--db-name", 
+    type="string", 
+    dest="database_name",
+    help="[REQUIRED] which database to check", 
+    metavar="DATABASE_NAME"
+  )
+  parser.add_option(
+    "-c", "--collection-name", 
+    type="string", 
+    dest="collection_name",
+    help="[REQUIRED] which collection to check",
+    metavar="COLLECTION_NAME"
+    )
+  ####Adding Soon####
+  parser.add_option(
+    "-R", "--readOnly", 
+    dest="readOnly",
+    help="ReadOnly: Do not split chunks", 
+    metavar="ReadOnly"
+  )
+  parser.add_option(
+    "-n", "--number_chunks", 
+    dest="chunk_count",
+    help="Number of chunks to split (when not using --readOnly)", 
+    metavar="NumberChunks"
+  )
+  parser.add_option(
+    "-s", "--size", 
+    dest="size",
+    help="Chunk Max Size Defaults:64",
+    type="int",
+    default=64, 
+    metavar="SIZE"
+  )
+  parser.add_option(
+    "-S", "--scale", 
+    dest="scale",
+    help="Output Scaling (K,M,G) Default 'M'", 
+    type="string", 
+    default="M",
+    metavar="SCALE"
+  )
+  parser.add_option(
+    "-u", "--username", 
+    type="string",
+    dest="user",
+    help="[REQUIRED] Admin Auth User", 
+    metavar="USER"
+  )
+  parser.add_option(
+    "-p", "--password", 
+    type="string",
+    dest="password",
+    help="[REQUIRED] Admin Auth Password", 
+    metavar="PASSWORD"
+  )
+  return parser
+
+
+ 
 if __name__ == "__main__":
+  parser = parserSetup()
+  (options, args) = parser.parse_args()
+  checkRequiredArguments(options,parser)
   find_chunks(options)
