@@ -121,13 +121,13 @@ class Orphan( object ):
 
         # detect if this is a center, top or bottom style chunk using the type of the key
         if isinstance(chunkdata['max'][shard_key], bson.max_key.MaxKey):
-            query_doc = { shard_key:{"$gt": chunkdata['min'][shard_key] } }
+            query_doc = { shard_key:{"$gte": chunkdata['min'][shard_key] } }
 
         elif isinstance(chunkdata['min'][shard_key], bson.min_key.MinKey):
-            query_doc = { shard_key:{ "$lte": chunkdata['max'][shard_key] } }
+            query_doc = { shard_key:{ "$lt": chunkdata['max'][shard_key] } }
 
         else:
-            query_doc = { shard_key:{ "$gt": chunkdata['min'][shard_key], "$lte": chunkdata['max'][shard_key] }  }
+            query_doc = { shard_key:{ "$gte": chunkdata['min'][shard_key], "$lt": chunkdata['max'][shard_key] }  }
 
         if options.verbose: print ("chunk:%s checking %s with query:%s") % (chunkdata['_id'], port, query_doc)
 
