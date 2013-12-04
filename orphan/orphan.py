@@ -182,17 +182,15 @@ class Orphan( object ):
         orphan_chunk_count = 0
 
         for chunk in self.getChunks():
-
             if 'ns' in chunk and not self.isHashedKey(chunk['ns']):
+                if not   options.namespace or options.namespace == chunk['ns'] :
+                    if options.verbose: print ("\n\nprocessing chunk %s") % chunk['_id']
 
-                if options.verbose: print ("\n\nprocessing chunk %s") % chunk['_id']
-
-                shards_to_visit = self.getOppositeShards(chunk['shard'])
-                for shard in shards_to_visit:
-
-                    (host, port) = self.parseShardStr(shard)
-                    if options.verbose: print "\nchecking host: %s" % host
-                    orphan_chunk_count += self.queryForChunk( host, port, chunk )
+                    shards_to_visit = self.getOppositeShards(chunk['shard'])
+                    for shard in shards_to_visit:
+                        (host, port) = self.parseShardStr(shard)
+                        if options.verbose: print "\nchecking host: %s" % host
+                        orphan_chunk_count += self.queryForChunk( host, port, chunk )
 
             else:
 
@@ -207,10 +205,12 @@ if __name__ == "__main__":
     parser.set_defaults(host="localhost",port=27017)
     parser.add_option("--host", dest="host", help="hostname to connect to")
     parser.add_option("--port", dest="port", type=int, help="port to connect to")
+    parser.add_option("--ns", dest="namespace", default=False, help="limit results this NS")
     parser.add_option("--username", dest="username", help="username")
     parser.add_option("--password", dest="password", help="password")
     parser.add_option("--fastmode", dest="fastmode", action="store_true", default=True, help="quick pass mode or detailed logging of each orphan")
     parser.add_option("--verbose", dest="verbose", action="store_true", default=False, help="have verbose output about what is being checked")
+    
     (options, args) = parser.parse_args()
 
     orphan_output = {}
