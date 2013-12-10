@@ -23,6 +23,14 @@ class Orphan( object ):
         self.config_connection =  MongoClient(options.host, options.port)
         self.config_connection['admin'].authenticate(options.username, options.password)
 
+    def writeLine(self,message,newLine=False):
+        if newLine == True:
+            print("")
+        sys.stdout.write(message)
+        sys.stdout.flush()
+        sys.stdout.write('\r')
+        sys.stdout.flush()
+
     def getBalancerState(self):
         try:
             balancer_state = self.config_connection['config']['settings'].find_one({"_id":"balancer"},{"_id":0,"stopped":1})
@@ -54,12 +62,24 @@ class Orphan( object ):
         else:
             return True
 
+    def getChunksCount(self):
+        """ return chunk count """
+
+        db = self.config_connection['config']
+        if not options.namespace:
+            return db.chunks.count()
+        else:
+            return db.chunks.find({"ns":options.namespace}).count()
+
     def getChunks(self):
         """ return chunk list """
 
         chunks = []
         db = self.config_connection['config']
-        all_chunks = db.chunks.find()
+        if not options.namespace:
+            all_chunks = db.chunks.find()
+        else:
+            all_chunks = db.chunks.find({"ns":options.namespace})
 
         for chunk in all_chunks:
             chunks.append(chunk)
@@ -178,19 +198,19 @@ class Orphan( object ):
     def checkForOrphans(self):
 
         chunks = []
-
+        total_chunks = self.getChunksCount()
         orphan_chunk_count = 0
+        current_chunk_count = 0
 
         for chunk in self.getChunks():
+            current_chunk_count += 1
+            self.writeLine("Proccessing chunk %s of %s " % (current_chunk_count,total_chunks))
             if 'ns' in chunk and not self.isHashedKey(chunk['ns']):
-                if not   options.namespace or options.namespace == chunk['ns'] :
-                    if options.verbose: print ("\n\nprocessing chunk %s") % chunk['_id']
-
-                    shards_to_visit = self.getOppositeShards(chunk['shard'])
-                    for shard in shards_to_visit:
-                        (host, port) = self.parseShardStr(shard)
-                        if options.verbose: print "\nchecking host: %s" % host
-                        orphan_chunk_count += self.queryForChunk( host, port, chunk )
+                shards_to_visit = self.getOppositeShards(chunk['shard'])
+                for shard in shards_to_visit:
+                    (host, port) = self.parseShardStr(shard)
+                    if options.verbose: print "\nchecking host: %s" % host
+                    orphan_chunk_count += self.queryForChunk( host, port, chunk )
 
             else:
 
