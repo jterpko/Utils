@@ -1,11 +1,11 @@
 #!/opt/python/bin/python 
+from __future__ import print_function
 import datetime
 import sys
 import json
 from bson import BSON
 from optparse import OptionParser
 from bson.objectid import ObjectId
-from __future__ import print_function
 from pymongo import Connection, ReadPreference
 from pymongo.errors import ConnectionFailure, OperationFailure
 
