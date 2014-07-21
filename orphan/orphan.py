@@ -44,6 +44,8 @@ class Orphan( object ):
             sys.exit(0)
 
     def setBalancer(self, state):
+        if isinstance(state,bool):
+            state = no state
         try:
             self.config_connection['config']['settings'].update({"_id":"balancer"}, {"$set" : { "stopped": state}}, True, False)
         except Exception, e:
