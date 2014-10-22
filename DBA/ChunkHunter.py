@@ -95,7 +95,6 @@ class ChunkFinder(object):
         try:
             if namespace is not None:
                 (db, coll) = namespace.split('.')
-                print("Chunk count for  {} was {}".format(namespace, self.conn[db][coll].count()))
                 return self.conn[db][coll].find({"ns": "{}.{}".format(self.database, self.collection)})
             else:
                 return self.conn.config.chunks.find({"ns": "{}.{}".format(self.database, self.collection)})
@@ -154,7 +153,7 @@ class ChunkFinder(object):
 
     def generate_report_by_namespace(self):
         report = {}
-        chunks = self.get_chunks("{}.{}".format(self.output_database, "with_jumbos"))
+        chunks = self.get_chunks("{}.{}".format(self.output_database, self.output_collection))
 
         for chunk in chunks:
             if chunk['ns'] not in report:
@@ -183,16 +182,17 @@ class ChunkFinder(object):
         if not self.conn.is_mongos:
             sys.exit(red("This tool is not for use with non sharded clusters!"))
         else:
+            if self.conn[self.output_database][self.output_collection].count() > 0 :
+                sys.exit(red("The output collection of {}.{} already has data please select another location!".format(self.output_database,self.output_collection)))
             self.populate_output_collection()
             chunks = self.get_chunks("{}.{}".format(self.output_database, self.output_collection))
             chunk_count = self.conn[self.output_database][self.output_collection].count()
-            process_count = 1
 
             print("Processing Chunks for size using {}:".format(self.mode))
 
             for chunk in chunks:
                 outputDoc = self.process_chunk(chunk)
-
+                process_count = self.conn[self.output_database][self.output_collection].find({'processed': True}).count()
                 print("\tProcessing {} of {}".format(process_count, chunk_count), end="\r")
 
                 sys.stdout.flush()
@@ -226,4 +226,5 @@ if __name__ == "__main__":
         sys.exit(red("Must set login AND name if using authentication"))
 
     ChunkFinder(args)
+
 
