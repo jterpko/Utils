@@ -196,7 +196,6 @@ class ChunkFinder(object):
                 print("\tProcessing {} of {}".format(process_count, chunk_count), end="\r")
 
                 sys.stdout.flush()
-                process_count += 1
                 self.save_document(outputDoc)
 
             print("\nSummary Report")
@@ -226,5 +225,4 @@ if __name__ == "__main__":
         sys.exit(red("Must set login AND name if using authentication"))
 
     ChunkFinder(args)
-
 
