@@ -11,7 +11,7 @@ from pymongo import MongoClient
 from prettytable import PrettyTable
 
 
-class ChunkFinder(object):
+class ChunkHunter(object):
     def __init__(self, args):
         self.host = args.host
         self.port = args.port
@@ -20,6 +20,7 @@ class ChunkFinder(object):
         self.user = args.user
         self.password = args.password
         self.noauth = args.noauth
+
         self.mode = args.check_mode
         self.jumbos_found = None
         (self.output_database, self.output_collection) = args.output_ns.split(".")
@@ -182,8 +183,13 @@ class ChunkFinder(object):
         if not self.conn.is_mongos:
             sys.exit(red("This tool is not for use with non sharded clusters!"))
         else:
-            if self.conn[self.output_database][self.output_collection].count() > 0 :
-                sys.exit(red("The output collection of {}.{} already has data please select another location!".format(self.output_database,self.output_collection)))
+            if self.conn[self.output_database][self.output_collection].count() > 0:
+                sys.exit(
+                    red(
+                        "The output collection of {}.{} already has data please select another location!" %
+                        (self.output_database, self.output_collection)
+                    )
+                )
             self.populate_output_collection()
             chunks = self.get_chunks("{}.{}".format(self.output_database, self.output_collection))
             chunk_count = self.conn[self.output_database][self.output_collection].count()
@@ -214,9 +220,9 @@ if __name__ == "__main__":
     parser.add_argument("-u", "--user", help="Admin user of the cluster", required=False)
     parser.add_argument("-p", "--password", help="Admin password", required=False)
     parser.add_argument("-n", "--noauth", help="Disable Auth Attempts", action='store_true', required=False)
-
     parser.add_argument("-d", "--database", help="Database to examine", required=True)
     parser.add_argument("-c", "--collection", help="Collection to examine", required=True)
+
     parser.add_argument("-O", "--output-ns", help="Namespace to save results to", required=True)
     parser.add_argument("-m", "--check-mode", help="Checking method to use [count,datasize]", required=True)
 
@@ -224,5 +230,5 @@ if __name__ == "__main__":
     if (args.noauth is None and (args.login is None or args.instance_name is None)):
         sys.exit(red("Must set login AND name if using authentication"))
 
-    ChunkFinder(args)
+    ChunkHunter(args)
 
