@@ -22,6 +22,7 @@ class ChunkHunter(object):
         self.noauth = args.noauth
 
         self.mode = args.check_mode
+        self.autodrop = args.autodrop
         self.jumbos_found = None
         (self.output_database, self.output_collection) = args.output_ns.split(".")
         self.ns = '.'.join([self.database, self.collection])
@@ -179,11 +180,20 @@ class ChunkHunter(object):
 
         print(outputTable)
 
+    def findSplittableChunks(self):
+        find_doc = {
+            "$and": [
+                {"ns": "{}.{}".format(self.database, self.collection)},
+                {"$or": [{"size": {"$gt": 64}}, {"docs": {"$gt": 125000}}]}
+            ]
+        }
+        self.conn[self.output_database][self.output_collection].count(find_doc)
+
     def main(self):
         if not self.conn.is_mongos:
             sys.exit(red("This tool is not for use with non sharded clusters!"))
         else:
-            if self.conn[self.output_database][self.output_collection].count() > 0:
+            if self.autodrop is not True and self.conn[self.output_database][self.output_collection].count() > 0:
                 sys.exit(
                     red(
                         "The output collection of {}.{} already has data please select another location!" %
@@ -225,10 +235,10 @@ if __name__ == "__main__":
 
     parser.add_argument("-O", "--output-ns", help="Namespace to save results to", required=True)
     parser.add_argument("-m", "--check-mode", help="Checking method to use [count,datasize]", required=True)
+    parser.add_argument("-A", "--autodrop", help="Remove output-ns if it exists", action='store_true', required=False)
 
     args = parser.parse_args()
     if (args.noauth is None and (args.login is None or args.instance_name is None)):
         sys.exit(red("Must set login AND name if using authentication"))
 
     ChunkHunter(args)
-
