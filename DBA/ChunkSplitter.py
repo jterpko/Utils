@@ -9,7 +9,8 @@ import math
 
 from bson.min_key import MinKey
 from bson.max_key import MaxKey
-from fabric.colors import red, white
+from fabric.colors import red
+from pymongo import MongoClient
 
 
 class ChunkSplitter(object):
@@ -158,33 +159,28 @@ class ChunkSplitter(object):
             print("Chunk %s was unchanged not saving!" % outputDoc['_id'])
 
     def main(self):
-        if self.inst.type == "mongodb_replica_set":
-            sys.exit(red("Unable to process replica set instances!"))
-        else:
-            if self.is_sharded():
-                counter = 0
-                total_count = len(list(self.get_chunks("{}.{}".format(self.input_database, self.input_collection))))
-                for chunk in self.get_chunks("{}.{}".format(self.input_database, self.input_collection)):
-                    outputDoc = self.process_chunk(chunk)
-                    counter += 1
-                    print("%s/%s" % (counter, total_count))
-                    time.sleep(0.05)
-                    self.save_document(outputDoc)
-            else:
-                sys.exit(white("{} is not sharded".format(red(self.database+"."+self.collection))))
+        counter = 0
+        total_count = len(list(self.get_chunks("{}.{}".format(self.input_database, self.input_collection))))
+        for chunk in self.get_chunks("{}.{}".format(self.input_database, self.input_collection)):
+            outputDoc = self.process_chunk(chunk)
+            counter += 1
+            print("%s/%s" % (counter, total_count))
+            time.sleep(0.05)
+            self.save_document(outputDoc)
         print  # Final newline for readability
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Report on disk usage of all vz's for an instance", prog="chunk_size_estimator")
-    parser.add_argument("-o", "--objid", help="ObjectID of the Instance", required=False)
-    parser.add_argument("-l", "--login", help="User login of the Instance", required=False)
-    parser.add_argument("-i", "--instance-name", help="Name of the Instance", required=False)
+    parser.add_argument("-H", "--host", help="ObjectID of the Instance", required=True)
+    parser.add_argument("-P", "--port", help="ObjectID of the Instance", required=True)
+    parser.add_argument("-u", "--user", help="ObjectID of the Instance", required=False)
+    parser.add_argument("-p", "--password", help="ObjectID of the Instance", required=False)
     parser.add_argument("-D", "--docs", help="Min # of documents for split. Can't use with the size option", type=int, required=False, default=200000)
     parser.add_argument("-s", "--size", help="Min size of documents for split. Can't use with the docs option", type=int, required=False, default=64)
-
     parser.add_argument("-d", "--database", help="Database to examine", required=True)
     parser.add_argument("-c", "--collection", help="Collection to examine", required=True)
     parser.add_argument("-I", "--input-namespace", help="Namespace to get saved results from", required=True)
+    parser.add_argument("-n", "--noauth", help="ObjectID of the Instance", required=False)
     parser.add_argument(
         "-M",
         "--split-using-middle",
@@ -194,7 +190,5 @@ if __name__ == "__main__":
         required=False
     )
     args = parser.parse_args()
-    if (args.objid is None and (args.login is None or args.instance_name is None)):
-        sys.exit(red("Must set objid or login AND name"))
     print(args)
     ChunkSplitter(args)
