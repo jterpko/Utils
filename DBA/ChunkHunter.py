@@ -187,7 +187,7 @@ class ChunkHunter(object):
                 {"$or": [{"size": {"$gt": 64}}, {"docs": {"$gt": 125000}}]}
             ]
         }
-        self.conn[self.output_database][self.output_collection].count(find_doc)
+        return self.conn[self.output_database][self.output_collection].count(find_doc)
 
     def main(self):
         if not self.conn.is_mongos:

@@ -7,11 +7,9 @@ import sys
 
 
 from fabric.colors import red
-from pymongo import MongoClient
-from prettytable import PrettyTable
 
 from ChunkSplitter import ChunkSplitter
-from ChunkHunter import ChunkHunter
+from ChunkHunter import ChunkHunter, findSplittableChunks
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Chunk Size estimation tool for sharded collections", prog="ChunkHunter")
@@ -54,10 +52,8 @@ if __name__ == "__main__":
 
     #Lets do some work
     ChunkHunter(args)
-    current_splittable_count = self.getSplittableCount(args)
+    current_splittable_count = findSplittableChunks(args)
     while current_splittable_count > 0:
         ChunkSplitter(args)
         ChunkHunter(args)
-        current_splittable_count = self.getSplittableCount(args)
-
-
+        current_splittable_count = findSplittableChunks(args)
