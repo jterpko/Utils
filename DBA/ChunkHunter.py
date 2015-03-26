@@ -7,7 +7,8 @@ import sys
 
 
 from fabric.colors import red
-from pymongo import MongoClient
+from pymongo import MongoClient, errors
+
 from prettytable import PrettyTable
 
 
@@ -98,7 +99,7 @@ class ChunkHunter(object):
         try:
             if namespace is not None:
                 (db, coll) = namespace.split('.')
-                return self.conn[db][coll].find({"ns": "{}.{}".format(self.database, self.collection)},timeout=False)
+                return self.conn[db][coll].find({"ns": "{}.{}".format(self.database, self.collection)}, timeout=False)
             else:
                 return self.conn.config.chunks.find({"ns": "{}.{}".format(self.database, self.collection)})
         except:
@@ -202,7 +203,13 @@ class ChunkHunter(object):
                     )
                 )
             if self.autodrop is True:
-                self.conn[self.output_database].drop_collection(self.output_collection)
+                try:
+                    self.conn[self.output_database].drop_collection("%s_old" % self.output_collection)
+                except errors.InvalidName:
+                    pass
+
+                self.conn[self.output_database][self.output_collection].rename("%s_old" % self.output_collection)
+
             self.populate_output_collection()
             chunks = self.get_chunks("{}.{}".format(self.output_database, self.output_collection))
             chunk_count = self.conn[self.output_database][self.output_collection].count()
