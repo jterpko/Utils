@@ -1,4 +1,5 @@
 #! /usr/bin/env python
+from __future__ import print_function
 
 import argparse
 import sys
@@ -75,9 +76,10 @@ class ChunkSplitter(object):
             if namespace is not None:
                 (db, coll) = namespace.split('.')
                 findObj = {
-                    'ns': "%s.%s" % (self.database, self.collection),
-                    'docs': {'$gt': self.docs},
-                    'size': {'$gt': self.size}
+                        "$and": [
+                                {"ns": "{}.{}".format(self.database, self.collection)},
+                                {"$or": [{"size": {"$gt": self.size}}, {"docs": {"$gt": self.docs}}]}
+                        ]
                 }
                 return self.conn[db][coll].find(findObj)
         except:
@@ -109,7 +111,7 @@ class ChunkSplitter(object):
                 else:
                     result = self.conn.admin.command("split", chunk['ns'], find=chunk['min'])
             except Exception as e:
-                print("Failed to  run split due to {}".format(e))
+                print("\tFailed to  run split due to {}".format(e))
                 pass
             self.conn.admin.command("flushRouterConfig")
             return True if result is not None and (result['ok'] == 1 or result['ok'] == 1.0) else None
@@ -164,7 +166,7 @@ class ChunkSplitter(object):
         for chunk in self.get_chunks("{}.{}".format(self.input_database, self.input_collection)):
             outputDoc = self.process_chunk(chunk)
             counter += 1
-            print("%s/%s" % (counter, total_count))
+            print("%s/%s" % (counter, total_count),end="\r")
             time.sleep(0.05)
             self.save_document(outputDoc)
         print  # Final newline for readability

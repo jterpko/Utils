@@ -9,7 +9,7 @@ import sys
 from fabric.colors import red
 
 from ChunkSplitter import ChunkSplitter
-from ChunkHunter import ChunkHunter, findSplittableChunks
+from ChunkHunter import ChunkHunter
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Chunk Size estimation tool for sharded collections", prog="ChunkHunter")
@@ -46,14 +46,23 @@ if __name__ == "__main__":
     args.input_namespace = args.temp_namespace
     args.output_ns = args.temp_namespace
     args.autodrop = True
+    args.split_using_middle = None
 
     if args.debug is True:
         print(args)
 
     #Lets do some work
-    ChunkHunter(args)
-    current_splittable_count = findSplittableChunks(args)
+    chObj = ChunkHunter(args)
+    current_splittable_count = chObj.findSplittableChunks()
+    print("Current Splittable:\t\t%s" % current_splittable_count)
+    last_count = None
     while current_splittable_count > 0:
-        ChunkSplitter(args)
-        ChunkHunter(args)
-        current_splittable_count = findSplittableChunks(args)
+        if last_count is None or  last_count != current_splittable_count:
+                csObj = ChunkSplitter(args)
+                chObj = ChunkHunter(args)
+                last_count = current_splittable_count
+                current_splittable_count = chObj.findSplittableChunks()
+                print("Current Splittable:\t\t%s" % current_splittable_count)
+        else:
+                sys.exit("Last Count:\t%s was the same are current (%s)" % (last_count,current_splittable_count))
+

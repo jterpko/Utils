@@ -13,6 +13,7 @@ from prettytable import PrettyTable
 
 class ChunkHunter(object):
     def __init__(self, args):
+        self.args = args
         self.host = args.host
         self.port = args.port
         self.database = args.database
@@ -97,7 +98,7 @@ class ChunkHunter(object):
         try:
             if namespace is not None:
                 (db, coll) = namespace.split('.')
-                return self.conn[db][coll].find({"ns": "{}.{}".format(self.database, self.collection)})
+                return self.conn[db][coll].find({"ns": "{}.{}".format(self.database, self.collection)},timeout=False)
             else:
                 return self.conn.config.chunks.find({"ns": "{}.{}".format(self.database, self.collection)})
         except:
@@ -184,10 +185,10 @@ class ChunkHunter(object):
         find_doc = {
             "$and": [
                 {"ns": "{}.{}".format(self.database, self.collection)},
-                {"$or": [{"size": {"$gt": 64}}, {"docs": {"$gt": 125000}}]}
+                {"$or": [{"size": {"$gt": self.args.size}}, {"docs": {"$gt": self.args.docs}}]}
             ]
         }
-        return self.conn[self.output_database][self.output_collection].count(find_doc)
+        return self.conn[self.output_database][self.output_collection].find(find_doc).count()
 
     def main(self):
         if not self.conn.is_mongos:
@@ -200,6 +201,8 @@ class ChunkHunter(object):
                         (self.output_database, self.output_collection)
                     )
                 )
+            if self.autodrop is True:
+                self.conn[self.output_database].drop_collection(self.output_collection)
             self.populate_output_collection()
             chunks = self.get_chunks("{}.{}".format(self.output_database, self.output_collection))
             chunk_count = self.conn[self.output_database][self.output_collection].count()
