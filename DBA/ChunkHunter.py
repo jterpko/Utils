@@ -3,12 +3,12 @@
 from __future__ import print_function
 
 import argparse
+import collections
 import sys
 
 
 from fabric.colors import red
-from pymongo import MongoClient, errors
-
+from pymongo import MongoClient
 from prettytable import PrettyTable
 
 
@@ -22,7 +22,6 @@ class ChunkHunter(object):
         self.user = args.user
         self.password = args.password
         self.noauth = args.noauth
-
         self.mode = args.check_mode
         self.autodrop = args.autodrop
         self.jumbos_found = None
@@ -34,7 +33,7 @@ class ChunkHunter(object):
 
     def connect_mongos(self):
         try:
-            client = MongoClient(self.host, int(self.port))
+            client = MongoClient(self.host, int(self.port),document_class = collections.OrderedDict)
         except Exception as e:
             sys.exit(red("Unabled to create connection to mongos! Due to: {}".format(e)))
 
@@ -84,6 +83,9 @@ class ChunkHunter(object):
                 "jumbo": -1
             }
 
+            if len(chunk['min']) > 2:
+                sys.exit(red("Count mode is not for use on collections with compound shard keys that have more than two fields."))
+
             try:
                 self.conn[self.output_database][self.output_collection].insert(outputDoc)
             except:
@@ -99,9 +101,9 @@ class ChunkHunter(object):
         try:
             if namespace is not None:
                 (db, coll) = namespace.split('.')
-                return self.conn[db][coll].find({"ns": "{}.{}".format(self.database, self.collection)}, timeout=False)
+                return self.conn[db][coll].find({"ns": "{}.{}".format(self.database, self.collection)},timeout=False)
             else:
-                return self.conn.config.chunks.find({"ns": "{}.{}".format(self.database, self.collection)})
+                return self.conn.config.chunks.find({"ns": "{}.{}".format(self.database, self.collection)},timeout=False)
         except:
             return {}
 
@@ -138,10 +140,36 @@ class ChunkHunter(object):
         findDoc = {}
         projectDoc = {}
         avg_doc_size = self.conn[self.database].command("collstats", self.collection)['avgObjSize']
+        field_count = len(outputDoc['min'])
 
-        for key in outputDoc['min']:
-            findDoc.update({key: {'$gte': outputDoc['min'][key], '$lt': outputDoc['max'][key]}})
-            projectDoc.update({key: 1})
+        if field_count == 1:
+            for key in outputDoc['min']:
+                findDoc.update({key: {'$gte': outputDoc['min'][key], '$lt': outputDoc['max'][key]}})
+                projectDoc.update({key: 1, "_id": 0})
+        elif field_count == 2:
+            i=1
+            for key in outputDoc['min']:
+                if i == 1:
+                    field1_key = key
+                    field1_min_value = outputDoc['min'][key]
+                    field1_max_value = outputDoc['max'][key]
+                    i = i + 1
+                elif i == 2:
+                    field2_key = key
+                    field2_min_value = outputDoc['min'][key]
+                    field2_max_value = outputDoc['max'][key]
+                    i = i + 1
+            if ( field1_min_value != field1_max_value ):
+                findDoc = { '$or' : [
+                    {field1_key : field1_min_value, field2_key : {'$gte' : field2_min_value}},
+                    {'$and' : [ {field1_key : {'$gt' : field1_min_value}},{field1_key:{'$lt': field1_max_value}}]},
+                    {field1_key : field1_max_value, field2_key : {'$lt' : field2_max_value}}
+                ]}
+            else:
+                findDoc = { field1_key : field1_min_value, field2_key : { '$gte': field2_min_value, '$lt' : field2_max_value}}
+            projectDoc.update({field1_key: 1, field2_key: 1, "_id": 0})
+        else:
+            sys.exit(red("The number of fields in the shard key is greater than two."))
 
         doc_count = self.conn[self.database][self.collection].find(findDoc, projectDoc).count()
         outputDoc['docs'] = doc_count
@@ -204,11 +232,12 @@ class ChunkHunter(object):
                 )
             if self.autodrop is True:
                 try:
-                    self.conn[self.output_database].drop_collection("%s_old" % self.output_collection)
-                except errors.InvalidName:
-                    pass
-
-                self.conn[self.output_database][self.output_collection].rename("%s_old" % self.output_collection)
+                    self.conn[self.output_database].create_collection("%s" % self.output_collection)
+                except Exception as e:
+                    try:
+                        self.conn[self.output_database][self.output_collection].rename("%s_old" % self.output_collection, dropTarget=True)
+                    except Exception as e:
+                        sys.exit(red("Could not rename output collection."))
 
             self.populate_output_collection()
             chunks = self.get_chunks("{}.{}".format(self.output_database, self.output_collection))
@@ -242,7 +271,6 @@ if __name__ == "__main__":
     parser.add_argument("-n", "--noauth", help="Disable Auth Attempts", action='store_true', required=False)
     parser.add_argument("-d", "--database", help="Database to examine", required=True)
     parser.add_argument("-c", "--collection", help="Collection to examine", required=True)
-
     parser.add_argument("-O", "--output-ns", help="Namespace to save results to", required=True)
     parser.add_argument("-m", "--check-mode", help="Checking method to use [count,datasize]", required=True)
     parser.add_argument("-A", "--autodrop", help="Remove output-ns if it exists", action='store_true', required=False)
