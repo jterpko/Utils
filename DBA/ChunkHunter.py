@@ -33,7 +33,7 @@ class ChunkHunter(object):
 
     def connect_mongos(self):
         try:
-            client = MongoClient(self.host, int(self.port),document_class = collections.OrderedDict)
+            client = MongoClient(self.host, int(self.port), document_class=collections.OrderedDict)
         except Exception as e:
             sys.exit(red("Unabled to create connection to mongos! Due to: {}".format(e)))
 
@@ -147,7 +147,7 @@ class ChunkHunter(object):
                 findDoc.update({key: {'$gte': outputDoc['min'][key], '$lt': outputDoc['max'][key]}})
                 projectDoc.update({key: 1, "_id": 0})
         elif field_count == 2:
-            i=1
+            i = 1
             for key in outputDoc['min']:
                 if i == 1:
                     field1_key = key
@@ -159,14 +159,14 @@ class ChunkHunter(object):
                     field2_min_value = outputDoc['min'][key]
                     field2_max_value = outputDoc['max'][key]
                     i = i + 1
-            if ( field1_min_value != field1_max_value ):
-                findDoc = { '$or' : [
-                    {field1_key : field1_min_value, field2_key : {'$gte' : field2_min_value}},
-                    {'$and' : [ {field1_key : {'$gt' : field1_min_value}},{field1_key:{'$lt': field1_max_value}}]},
-                    {field1_key : field1_max_value, field2_key : {'$lt' : field2_max_value}}
+            if (field1_min_value != field1_max_value):
+                findDoc = {'$or': [
+                    {field1_key: field1_min_value, field2_key: {'$gte': field2_min_value}},
+                    {'$and': [{field1_key: {'$gt': field1_min_value}}, {field1_key: {'$lt': field1_max_value}}]},
+                    {field1_key: field1_max_value, field2_key: {'$lt': field2_max_value}}
                 ]}
             else:
-                findDoc = { field1_key : field1_min_value, field2_key : { '$gte': field2_min_value, '$lt' : field2_max_value}}
+                findDoc = {field1_key: field1_min_value, field2_key: {'$gte': field2_min_value, '$lt': field2_max_value}}
             projectDoc.update({field1_key: 1, field2_key: 1, "_id": 0})
 
         doc_count = self.conn[self.database][self.collection].find(findDoc, projectDoc).count()
@@ -229,10 +229,10 @@ class ChunkHunter(object):
                     )
                 )
             if self.autodrop is True:
-		try:
-            	    self.conn[self.output_database][self.output_collection].rename("%s_old" % self.output_collection, dropTarget=True)
-		except errors.OperationFailure:
-		    pass
+                try:
+                    self.conn[self.output_database][self.output_collection].rename("%s_old" % self.output_collection, dropTarget=True)
+                except errors.OperationFailure:
+                    pass
 
             self.populate_output_collection()
             chunks = self.get_chunks("{}.{}".format(self.output_database, self.output_collection))
@@ -266,6 +266,7 @@ if __name__ == "__main__":
     parser.add_argument("-n", "--noauth", help="Disable Auth Attempts", action='store_true', required=False)
     parser.add_argument("-d", "--database", help="Database to examine", required=True)
     parser.add_argument("-c", "--collection", help="Collection to examine", required=True)
+
     parser.add_argument("-O", "--output-ns", help="Namespace to save results to", required=True)
     parser.add_argument("-m", "--check-mode", help="Checking method to use [count,datasize]", required=True)
     parser.add_argument("-A", "--autodrop", help="Remove output-ns if it exists", action='store_true', required=False)
