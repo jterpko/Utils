@@ -22,6 +22,7 @@ class ChunkHunter(object):
         self.user = args.user
         self.password = args.password
         self.noauth = args.noauth
+
         self.mode = args.check_mode
         self.autodrop = args.autodrop
         self.jumbos_found = None
