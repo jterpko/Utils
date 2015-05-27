@@ -8,7 +8,7 @@ import sys
 
 
 from fabric.colors import red
-from pymongo import MongoClient
+from pymongo import MongoClient, errors
 from prettytable import PrettyTable
 
 
@@ -101,9 +101,9 @@ class ChunkHunter(object):
         try:
             if namespace is not None:
                 (db, coll) = namespace.split('.')
-                return self.conn[db][coll].find({"ns": "{}.{}".format(self.database, self.collection)},timeout=False)
+                return self.conn[db][coll].find({"ns": "{}.{}".format(self.database, self.collection)}, timeout=False)
             else:
-                return self.conn.config.chunks.find({"ns": "{}.{}".format(self.database, self.collection)},timeout=False)
+                return self.conn.config.chunks.find({"ns": "{}.{}".format(self.database, self.collection)}, timeout=False)
         except:
             return {}
 
@@ -168,8 +168,6 @@ class ChunkHunter(object):
             else:
                 findDoc = { field1_key : field1_min_value, field2_key : { '$gte': field2_min_value, '$lt' : field2_max_value}}
             projectDoc.update({field1_key: 1, field2_key: 1, "_id": 0})
-        else:
-            sys.exit(red("The number of fields in the shard key is greater than two."))
 
         doc_count = self.conn[self.database][self.collection].find(findDoc, projectDoc).count()
         outputDoc['docs'] = doc_count
@@ -231,13 +229,10 @@ class ChunkHunter(object):
                     )
                 )
             if self.autodrop is True:
-                try:
-                    self.conn[self.output_database].create_collection("%s" % self.output_collection)
-                except Exception as e:
-                    try:
-                        self.conn[self.output_database][self.output_collection].rename("%s_old" % self.output_collection, dropTarget=True)
-                    except Exception as e:
-                        sys.exit(red("Could not rename output collection."))
+		try:
+            	    self.conn[self.output_database][self.output_collection].rename("%s_old" % self.output_collection, dropTarget=True)
+		except errors.OperationFailure:
+		    pass
 
             self.populate_output_collection()
             chunks = self.get_chunks("{}.{}".format(self.output_database, self.output_collection))
